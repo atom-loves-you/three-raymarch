@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8">
+  <title>CodePen - Spooky Raymarch Pumpkin Armada - #anydayshaders 10</title>
+  <link rel="stylesheet" href="./style.css">
+
+</head>
+<body>
+<!-- partial:index.partial.html -->
+<digital-art aria-hidden="true">
+  <script type="frag">
+    const int ITERS = 100;
+    const float PI = 3.141592654;
+    uniform float time;
+    uniform float meter;
+    uniform float mouseX;
+    uniform float mouseY;
+    uniform vec2 resolution;
+    varying vec2 vUv;
+
+    // Calculate cameras "orthonormal basis", i.e. its transform matrix components
+    vec3 getCameraRayDir(vec2 uv, vec3 camPos, vec3 camTarget) {
+      vec3 camForward = normalize(camTarget - camPos);
+      vec3 camRight = normalize(cross(vec3(0.0, 1.0, 0.0), camForward));
+      vec3 camUp = normalize(cross(camForward, camRight));
+
+      float fPersp = 2.0;
+      vec3 vDir = normalize(uv.x * camRight + uv.y * camUp + camForward * fPersp);
+      return vDir;
+    }
+
+    // distance function for a sphere
+    float sphere(vec3 p, float r)
+    {
+        return length(p) - r;
+    }
+
+    float deformation(vec3 pos) {
+      return -.07 * abs(sin(atan(pos.z, pos.x) * 8.));
+    }
+
+    float subtract(float a, float b)
+    {
+      return max(-a, b);
+    }
+    
+    float pumpkin(vec3 pos, vec3 center) {
+      float eyeR = sin(time * 1.7) * .2;
+      float eyeL = cos(time * 1.7) * .2;
+      float d = deformation(pos - center);
+      vec3 spherePos = vec3(0) + center;
+      vec3 eyeLeftPos = vec3(-1., 1., -3. + eyeL) + center;
+      vec3 eyeRightPos = vec3(1., 1., -3. + eyeR) + center;
+      vec3 mouthPos = vec3(0.0, -1., -3.) + center;
+      vec3 mouth2Pos = vec3(0.0, -.6 - meter * .06 + sin(time * 2.) * .3, -3.) + center;
+      vec3 mouthScale = vec3(0.6, 1., 1.);
+      float t = sphere(pos - spherePos, 3.0) + d;
+      t = subtract(sphere(pos - spherePos, 2.9), t);
+      t = subtract(sphere(pos - eyeLeftPos, .7), t);
+      t = subtract(sphere(pos - eyeRightPos, .7) , t);
+      float mouth = sphere((pos - mouthPos) * mouthScale, .9) + d;
+      mouth = subtract(sphere((pos - mouth2Pos) * mouthScale, .89) + d, mouth);
+      
+      t = subtract(mouth, t);
+      return t;
+    }
+    
+    float scene(vec3 pos) {
+
+      float t = pumpkin(mod(pos, 10.), vec3(5.));
+      //float t = pumpkin(pos, vec3(0.));
+      t = min(t, pumpkin(pos, vec3(0.)));
+      return t;
+    }
+
+    // cast a ray along a direction and return 
+    // the distance to the first thing it hits
+    // if nothing was hit, return -1
+    float castRay(in vec3 rayOrigin, in vec3 rayDir)
+    {
+      float maxd = 80.0;
+      float t = 0.1;
+      for (int i=0; i< ITERS; i++) {
+        float h = scene(rayOrigin + rayDir * t );
+        if (h<(0.001 * t) || t>maxd) break;
+        t += h;
+      }
+      if( t>maxd ) t=-1.0;
+      return t;
+    }
+    
+
+    // calculate normal:
+    vec3 calcNormal(vec3 pos)
+    {
+      // Center sample
+      float c = scene(pos);
+      // Use offset samples to compute gradient / normal
+      vec2 eps_zero = vec2(0.001, 0.0);
+      return normalize(vec3( scene(pos + eps_zero.xyy), scene(pos + eps_zero.yxy), scene(pos + eps_zero.yyx) ) - c);
+    }
+
+    float S(float a, float b, float c) {
+      return sin(a * b + c);
+    }
+
+    vec3 background(vec2 p, float time) {
+      float s = S(.4, time, time);
+      float u = S(2.5 + 1. * s * 2., .5 * p.x, 1. + time);
+      float v = S(6.4 + 3. * s * s, .5 * p.y, 2. + time);
+      float w = S(2.3 + 2. * s, p.y + p.x, 3. + time );
+      float r = .3 + .05 * u + .1 * v + .05 * w;
+      float g = .1 + .05 * u + .025 * v + .05 * w;
+      float b = .0 + .01 * u + .01 * v + .005 * w;
+      return vec3(r, g, b);
+    }  
+
+    // Visualize depth based on the distance
+    vec3 render(vec2 p, vec3 rayOrigin, vec3 rayDir)
+    {
+      float t = castRay(rayOrigin, rayDir);
+      if (t == -1.0) {
+        return background(p * (1.2), time * .3);
+      }
+      // shading based on the distance
+      // vec3 col = vec3(4.0 - t * 0.35) * vec3(.7, 0, 1.0);
+
+      // shading based on the normals
+      vec3 pos = rayOrigin + rayDir * t;
+      vec3 N = calcNormal(pos);
+      vec3 L = normalize(vec3(sin(time *.1), 2.0, -0.5));
+      // L is vector from surface point to light
+      // N is surface normal. N and L must be normalized!
+      float NoL = max(dot(N, L), 0.0);
+      vec3 LDirectional = vec3(1.0, 0.9, 0.8) * NoL;
+      vec3 LAmbient = vec3(0.2);
+      vec3 col = vec3(1., .3, .0); 
+      vec3 diffuse = col * (LDirectional + LAmbient);  
+      return diffuse;
+    }
+    
+    // normalize coords and correct for aspect ratio
+    vec2 normalizeScreenCoords()
+    {
+      float aspectRatio = resolution.x / resolution.y;
+      vec2 result = 2.0 * (gl_FragCoord.xy / resolution - 0.5);
+      result.x *= aspectRatio; 
+      return result;
+    }
+
+    void main() {
+      float rotation = sin(time * .3) * PI / 4.;
+      vec3 camPos = vec3(12. * sin(rotation), -mouseY * 4., -12.0 * cos(rotation));
+      vec3 camTarget = vec3(0);
+      float aspectRatio = resolution.x / resolution.y;
+      vec2 p = (vUv - .5) * vec2(aspectRatio, 1.) * 2.;
+      
+      vec3 rayDir = getCameraRayDir(p, camPos, camTarget);
+  vec3 col = render(p, camPos, rayDir);
+      gl_FragColor = vec4(col, 1.);
+    }
+  </script>
+  <script type="vert">
+    varying vec2 vUv;
+    void main()	{
+      vUv = uv;
+      gl_Position = vec4( position, 1.0 );
+    }
+  </script>
+</digital-art>
+<button>Play Music</button>
+<!-- partial -->
+  <script src='https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.61/Tone.js'></script>
+<script src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r121/three.min.js'></script><script  src="./script.js"></script>
+
+</body>
+</html>

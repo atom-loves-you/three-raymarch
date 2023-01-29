@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+body {
+  background: #222;
+  color: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0;
+  height: 100vh;
+}
+
+button {
+  position: absolute;
+  background: orange;
+  right: 16px;
+  top: 16px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 1em;
+  padding: 16px;
+  color: black;
+  border: none;
+  cursor: pointer;
+}
+
+button:focus {
+  outline: 2px solid black;
+}
+
+button:active {
+  outline: 2px solid white;
+}
+
+
+digital-art {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+}
+
+digital-art * {
+  display: none;
+}
+
+digital-art canvas {
+  display: block;
+}
